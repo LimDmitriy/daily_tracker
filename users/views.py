@@ -6,6 +6,7 @@ from users.serializers import UserSerializer
 
 class UserCreateAPIView(CreateAPIView):
     """Контроллер пользователя"""
+
     serializer_class = UserSerializer
     queryset = User.objects.all()
 
