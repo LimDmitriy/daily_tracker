@@ -71,7 +71,8 @@ jobs:
           done
 
       - name: Run tests
-        run: poetry run pytest --ds=config.settings --maxfail=1 --disable-warnings -v
+        run: |
+          poetry run pytest daily_tracker/tests --ds=config.settings --maxfail=1 --disable-warnings -v
 
   docker-build-and-push:
     runs-on: ubuntu-latest
