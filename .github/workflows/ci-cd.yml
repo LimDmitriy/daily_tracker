@@ -10,9 +10,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      POSTGRES_DB: ${{ secrets.DB_NAME }}
-      POSTGRES_USER: ${{ secrets.DB_USER }}
-      POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      POSTGRES_DB: test_db
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_pass
       POSTGRES_PORT: 5432
       REDIS_URL: redis://localhost:6379/1
 
@@ -20,21 +20,17 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_DB: $POSTGRES_DB
-          POSTGRES_USER: $POSTGRES_USER
-          POSTGRES_PASSWORD: $POSTGRES_PASSWORD
-        ports:
-          - 5432:5432
+          POSTGRES_DB: test_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
         options: >-
-          --health-cmd "pg_isready -U $POSTGRES_USER"
+          --health-cmd "pg_isready -U test_user"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
 
       redis:
         image: redis:7
-        ports:
-          - 6379:6379
 
     steps:
       - name: Checkout code
@@ -55,15 +51,26 @@ jobs:
       - name: Run lint
         run: poetry run flake8 .
 
+      - name: Wait for Postgres
+        run: |
+          for i in {1..15}; do
+            pg_isready -h localhost -p $POSTGRES_PORT -U $POSTGRES_USER && break
+            echo "Waiting for Postgres..."
+            sleep 2
+          done
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PORT: 5432
+
       - name: Run tests
         run: poetry run pytest --ds=config.settings --maxfail=1 --disable-warnings -v
         env:
-          DB_NAME: $POSTGRES_DB
-          DB_USER: $POSTGRES_USER
-          DB_PASSWORD: $POSTGRES_PASSWORD
+          DB_NAME: test_db
+          DB_USER: test_user
+          DB_PASSWORD: test_pass
           DB_HOST: localhost
-          DB_PORT: $POSTGRES_PORT
-          REDIS_URL: $REDIS_URL
+          DB_PORT: 5432
+          REDIS_URL: redis://localhost:6379/1
 
   docker-build:
     runs-on: ubuntu-latest
@@ -82,8 +89,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Docker image
-        run: |
-          docker build -t yourusername/yourproject:latest .
+        run: docker build -t yourusername/yourproject:latest .
 
   docker-deploy:
     runs-on: ubuntu-latest
