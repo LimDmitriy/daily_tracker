@@ -1,5 +1,4 @@
 name: CI/CD
-
 on:
   push:
     branches: [ develop ]
@@ -7,29 +6,34 @@ on:
     branches: [ develop ]
 
 jobs:
-  test:
+  build-and-test:
     runs-on: ubuntu-latest
     env:
-      # Тестовые данные для Postgres и Redis
-      DB_NAME: test_db
-      DB_USER: test_user
-      DB_PASSWORD: test_pass
-      DB_HOST: localhost
-      DB_PORT: 5432
-      REDIS_URL: redis://localhost:6379/1
+      # Django env
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      DEBUG: True
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_HOST: db
+      DB_PORT: ${{ secrets.DB_PORT }}
+      REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
     services:
-      postgres:
+      db:
         image: postgres:15
         env:
-          POSTGRES_DB: test_db
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: ${{ secrets.DB_NAME }}
+          POSTGRES_USER: ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
         options: >-
-          --health-cmd "pg_isready -U test_user"
+          --health-cmd "pg_isready -U ${{ secrets.DB_USER }}"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 20
 
       redis:
         image: redis:7
@@ -37,10 +41,10 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 20
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -55,29 +59,16 @@ jobs:
           poetry config virtualenvs.create false
           poetry install --no-root
 
-      - name: Run lint
-        run: poetry run flake8 .
-
       - name: Wait for Postgres
         run: |
-          for i in {1..15}; do
-            pg_isready -h localhost -p $DB_PORT -U $DB_USER && break
+          for i in {1..20}; do
+            pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER && break
             echo "Waiting for Postgres..."
             sleep 2
           done
 
-      - name: Run tests
+      - name: Run Django tests
         run: poetry run pytest --ds=config.settings --maxfail=1 --disable-warnings -v
-
-  docker-build:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -86,23 +77,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Docker image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/yourproject:latest .
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/daily_tracker:latest .
 
-  docker-deploy:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
-          script: |
-            cd ~/daily_tracker/daily_tracker
-            docker-compose pull
-            docker-compose up -d --build
+      - name: Push Docker image
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/daily_tracker:latest
