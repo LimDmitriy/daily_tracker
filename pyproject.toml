@@ -13,8 +13,24 @@ flake8 = "^7.3.0"
 psycopg2-binary = "^2.9.11"
 pillow = "^12.1.0"
 dotenv = "^0.9.9"
+djangorestframework-simplejwt = "^5.5.1"
+isort = "^7.0.0"
+celery = "^5.6.2"
+redis = "^7.1.0"
+django-celery-beat = "^2.8.1"
+django-cors-headers = "^4.9.0"
+requests = "^2.32.5"
+python-telegram-bot = "20.7"
+pytest-cov = "^7.0.0"
+pytest = "^9.0.2"
+drf-spectacular = "^0.29.0"
 
 
+[tool.poetry.group.dev.dependencies]
+pytest-django = "^4.11.1"
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
